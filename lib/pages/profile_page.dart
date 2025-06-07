@@ -1,7 +1,9 @@
 // pages/profile_page.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../models/user_profile.dart';
@@ -25,7 +27,10 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _isLoading = true;
   bool _isEditing = false;
   bool _isSaving = false;
-  File? _selectedImage;
+  
+  // For web compatibility
+  Uint8List? _selectedImageBytes;
+  File? _selectedImageFile;
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
@@ -77,8 +82,15 @@ class _ProfilePageState extends State<ProfilePage> {
       );
       
       if (image != null) {
+        // Read image as bytes for web compatibility
+        final Uint8List imageBytes = await image.readAsBytes();
+        
         setState(() {
-          _selectedImage = File(image.path);
+          _selectedImageBytes = imageBytes;
+          // Only set file for non-web platforms
+          if (!kIsWeb) {
+            _selectedImageFile = File(image.path);
+          }
         });
       }
     } catch (e) {
@@ -102,8 +114,14 @@ class _ProfilePageState extends State<ProfilePage> {
       String? profilePictureUrl = _userProfile?.profilePictureUrl;
       
       // Upload new image if selected
-      if (_selectedImage != null) {
-        profilePictureUrl = await _userService.uploadProfilePicture(_selectedImage!);
+      if (_selectedImageBytes != null) {
+        if (kIsWeb) {
+          // For web, we need to upload the bytes directly
+          profilePictureUrl = await _userService.uploadProfilePictureBytes(_selectedImageBytes!);
+        } else if (_selectedImageFile != null) {
+          // For mobile, use the file
+          profilePictureUrl = await _userService.uploadProfilePicture(_selectedImageFile!);
+        }
       }
 
       final updatedProfile = UserProfile(
@@ -120,7 +138,8 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() {
           _userProfile = updatedProfile;
           _isEditing = false;
-          _selectedImage = null;
+          _selectedImageBytes = null;
+          _selectedImageFile = null;
           _isSaving = false;
         });
 
@@ -149,7 +168,8 @@ class _ProfilePageState extends State<ProfilePage> {
   void _cancelEdit() {
     setState(() {
       _isEditing = false;
-      _selectedImage = null;
+      _selectedImageBytes = null;
+      _selectedImageFile = null;
       _nameController.text = _userProfile?.name ?? '';
       _contactController.text = _userProfile?.contact ?? '';
     });
@@ -346,9 +366,9 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
             child: ClipOval(
-              child: _selectedImage != null
-                  ? Image.file(
-                      _selectedImage!,
+              child: _selectedImageBytes != null
+                  ? Image.memory(
+                      _selectedImageBytes!,
                       fit: BoxFit.cover,
                     )
                   : _userProfile?.profilePictureUrl != null
