@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/todo.dart';
 import '../services/database_service.dart';
+import '../services/auth_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,6 +15,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final DatabaseService _databaseService = DatabaseService();
+  final AuthService _authService = AuthService();
   final TextEditingController _taskController = TextEditingController();
 
   @override
@@ -32,14 +35,37 @@ class _HomePageState extends State<HomePage> {
   }
 
   PreferredSizeWidget _appBar() {
+    final user = _authService.currentUser;
     return AppBar(
       backgroundColor: Theme.of(context).colorScheme.primary,
       title: const Text(
-        "Todo",
+        "My Todos",
         style: TextStyle(
           color: Colors.white,
         ),
       ),
+      actions: [
+        // User email display
+        if (user?.email != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: Center(
+              child: Text(
+                user!.email!.split('@')[0], // Show username part only
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+        // Sign out button
+        IconButton(
+          icon: const Icon(Icons.logout, color: Colors.white),
+          onPressed: _showSignOutDialog,
+          tooltip: 'Sign Out',
+        ),
+      ],
     );
   }
 
@@ -63,7 +89,29 @@ class _HomePageState extends State<HomePage> {
           if (snapshot.hasError) {
             print('StreamBuilder error: ${snapshot.error}');
             return Center(
-              child: Text('Error: ${snapshot.error}'),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading todos',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${snapshot.error}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             );
           }
 
@@ -76,8 +124,31 @@ class _HomePageState extends State<HomePage> {
           List todos = snapshot.data?.docs ?? [];
           
           if (todos.isEmpty) {
-            return const Center(
-              child: Text("Add a todo!"),
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.checklist,
+                    size: 64,
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No todos yet!',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tap the + button to add your first todo',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
             );
           }
           
@@ -182,21 +253,39 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _addTodo(String task) {
-    Todo newTodo = Todo(
-      task: task,
-      isDone: false,
-      createdOn: Timestamp.now(),
-      updatedOn: Timestamp.now(),
-    );
-    _databaseService.addTodo(newTodo);
+    try {
+      Todo newTodo = Todo(
+        task: task,
+        isDone: false,
+        createdOn: Timestamp.now(),
+        updatedOn: Timestamp.now(),
+      );
+      _databaseService.addTodo(newTodo);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to add todo: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _updateTodoStatus(String todoId, Todo todo, bool newStatus) {
-    Todo updatedTodo = todo.copyWith(
-      isDone: newStatus,
-      updatedOn: Timestamp.now(),
-    );
-    _databaseService.updateTodo(todoId, updatedTodo);
+    try {
+      Todo updatedTodo = todo.copyWith(
+        isDone: newStatus,
+        updatedOn: Timestamp.now(),
+      );
+      _databaseService.updateTodo(todoId, updatedTodo);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update todo: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _deleteTodo(String todoId) {
@@ -213,14 +302,66 @@ class _HomePageState extends State<HomePage> {
             ),
             ElevatedButton(
               onPressed: () {
-                _databaseService.deleteTodo(todoId);
-                Navigator.of(context).pop();
+                try {
+                  _databaseService.deleteTodo(todoId);
+                  Navigator.of(context).pop();
+                } catch (e) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to delete todo: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
               ),
               child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showSignOutDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Sign Out'),
+          content: const Text('Are you sure you want to sign out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  await _authService.signOut();
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                    // Navigation will be handled by StreamBuilder in main.dart
+                  }
+                } catch (e) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to sign out: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Sign Out'),
             ),
           ],
         );

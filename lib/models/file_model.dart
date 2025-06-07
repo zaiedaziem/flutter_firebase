@@ -9,6 +9,7 @@ class FileModel {
   String uploadedBy;
   String description;
   List<String> tags;
+  String? userId; // Optional for backward compatibility
 
   FileModel({
     required this.fileName,
@@ -19,6 +20,7 @@ class FileModel {
     required this.uploadedBy,
     required this.description,
     required this.tags,
+    this.userId,
   });
 
   FileModel.fromJson(Map<String, Object?> json)
@@ -29,7 +31,8 @@ class FileModel {
         uploadedAt = json['uploadedAt'] as Timestamp,
         uploadedBy = json['uploadedBy'] as String? ?? '',
         description = json['description'] as String? ?? '',
-        tags = List<String>.from(json['tags'] as List? ?? []);
+        tags = List<String>.from(json['tags'] as List? ?? []),
+        userId = json['userId'] as String?;
 
   FileModel copyWith({
     String? fileName,
@@ -40,6 +43,7 @@ class FileModel {
     String? uploadedBy,
     String? description,
     List<String>? tags,
+    String? userId,
   }) {
     return FileModel(
       fileName: fileName ?? this.fileName,
@@ -50,6 +54,7 @@ class FileModel {
       uploadedBy: uploadedBy ?? this.uploadedBy,
       description: description ?? this.description,
       tags: tags ?? this.tags,
+      userId: userId ?? this.userId,
     );
   }
 
@@ -63,6 +68,7 @@ class FileModel {
       'uploadedBy': uploadedBy,
       'description': description,
       'tags': tags,
+      'userId': userId,
     };
   }
 
