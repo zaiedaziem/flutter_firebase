@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'pages/home_page.dart';
 import 'pages/file_page.dart';
 import 'pages/login_page.dart';
+import 'pages/profile_page.dart';
 import 'services/auth_service.dart';
 import 'firebase_options.dart';
 
@@ -111,6 +112,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   static const List<Widget> _pages = <Widget>[
     HomePage(),
     FilesPage(),
+    ProfilePage(),
   ];
 
   void _onItemTapped(int index) {
@@ -124,6 +126,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     return Scaffold(
       body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed, // Add this to support more than 2 tabs
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.checklist),
@@ -132,6 +135,10 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.folder),
             label: 'Files',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
         currentIndex: _selectedIndex,
